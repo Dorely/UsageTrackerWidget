@@ -91,3 +91,11 @@ Relevant fields:
 - codex-rs `backend-client`: rate-limit fetch from `/wham/usage`.
 - codex-rs `codex-api/src/endpoint/images.rs`: the image endpoints.
 - ImageGenCli `packages/providers-codex`: OAuth, token refresh lock, `readPlanLimits(headers)`.
+
+## Tracker implementation notes (2026-10-25)
+
+- UsageTrackerWidget uses its own OAuth grant and DPAPI-protected token store. It does not read or refresh Codex CLI or ImageGenCli credentials.
+- The image-meter probe sends `{"model":"gpt-image-2.5-flare"}` with no prompt. This is deliberately incomplete so the backend cannot generate an image even if the `background` validation behavior changes.
+- The tracker accepts image-meter data only from HTTP 400 responses whose body identifies the missing required prompt (`missing_required_parameter` or a `prompt` parameter error). It reads only `x-codex-primary-used-percent`, `x-codex-primary-window-minutes`, `x-codex-primary-reset-at`, `x-codex-primary-reset-after-seconds`, and `x-codex-plan-type`.
+- A different image response disables automatic image-meter tracking until the user explicitly re-enables it. There is no retry loop for this probe.
+- Live end-to-end verification of the signed-in image-meter response is still required with the tracker's own account login. No tokens or account-identifying values were recorded during implementation.

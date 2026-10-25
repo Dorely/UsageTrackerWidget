@@ -6,3 +6,17 @@ release/
 .env
 .env.*
 *.log
+
+# .NET build and tooling output
+bin/
+obj/
+artifacts/
+TestResults/
+.vs/
+*.user
+*.suo
+
+# Local runtime data
+*.db
+*.db-shm
+*.db-wal

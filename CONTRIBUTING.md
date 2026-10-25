@@ -8,6 +8,15 @@ Thanks for helping make AI usage limits visible.
 - Keep proposals aligned with the direction in `VISION.md`: usage checks stay read-only and quota-free, and data stays local.
 - Read `AGENTS.md` and `FILEMAP.md` for the project's conventions and layout.
 
+## Development
+
+- Install the .NET 10 SDK.
+- Build with `dotnet build UsageTrackerWidget.sln -c Release`.
+- Run with `dotnet run --project src/UsageTrackerWidget.App/UsageTrackerWidget.App.csproj`.
+- Publish the self-contained Windows build with `.\scripts\publish.ps1`.
+- Run the app after UI changes and record which interactions were checked. This project intentionally has no automated test project unless the maintainer requests one.
+- Never commit local credential, settings, or history files from `%LOCALAPPDATA%\UsageTrackerWidget`.
+
 ## Pull requests
 
 - Keep each pull request focused and describe the user-visible behavior it changes.

@@ -20,8 +20,10 @@
 - Keep `FILEMAP.md` entries concise - one to two lines per file maximum. If a file is doing more than can be reasonably construed within that limit, consider refactoring it.
 
 ## Tech Stack
-- Not yet chosen. Do not pick a stack, framework, or packaging approach without agreeing it with the user first.
-- The target platform is Windows.
+- .NET 10 LTS, C#, and WPF, targeting Windows.
+- Three projects: provider-neutral contracts in `UsageTrackerWidget.Core`, Codex OAuth and usage transport in `UsageTrackerWidget.Providers.Codex`, and the WPF app/tray/UI in `UsageTrackerWidget.App`.
+- Tray integration uses `H.NotifyIcon.Wpf`; MVVM uses `CommunityToolkit.Mvvm`; local history uses `Microsoft.Data.Sqlite`; credentials use Windows DPAPI.
+- Distribution is a self-contained `win-x64` folder via `scripts/publish.ps1`; there is no installer yet.
 
 ## Architectural Overview
 - Each AI service is a provider that reports named usage windows (used percent, window length, reset time) behind a common shape; the UI depends on that shape, not on provider internals.
