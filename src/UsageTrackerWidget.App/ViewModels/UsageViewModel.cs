@@ -282,9 +282,11 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         {
             LoginMessage = "Could not reach Codex sign-in. Check the network connection and try again.";
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            LoginMessage = "Codex sign-in failed. Try again.";
+            var detail = SafeSignInException(exception);
+            LoginMessage = $"Codex sign-in failed ({detail}). Try again.";
+            AddIssue("Codex sign-in", "The local sign-in flow stopped before it completed.", detail, false);
         }
         finally
         {
@@ -886,6 +888,18 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
             .ToArray())
             .Trim();
         return message.Length == 0 ? exception.GetType().Name : message;
+    }
+
+    private static string SafeSignInException(Exception exception)
+    {
+        var message = SafeExceptionDetail(exception);
+        var queryStart = message.IndexOf('?', StringComparison.Ordinal);
+        if (queryStart >= 0)
+        {
+            message = $"{message[..queryStart]}?[redacted]";
+        }
+
+        return $"{exception.GetType().Name}: {message}";
     }
 
     private static string WithLengthLimit(string value)

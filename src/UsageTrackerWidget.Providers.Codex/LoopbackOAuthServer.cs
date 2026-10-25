@@ -49,73 +49,57 @@ internal sealed class LoopbackOAuthServer : IDisposable
                 {
                     client = await _listener.AcceptTcpClientAsync(timeoutSource.Token);
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    throw new CodexAuthException("Codex sign-in timed out. Start sign-in again when ready.");
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw CreateTimeoutException();
                 }
                 catch (ObjectDisposedException)
                 {
                     throw new CodexAuthException("Codex sign-in was canceled.");
                 }
+                catch (Exception exception) when (exception is SocketException or IOException)
+                {
+                    if (timeoutSource.IsCancellationRequested)
+                    {
+                        throw CreateTimeoutException();
+                    }
+
+                    continue;
+                }
 
                 using (client)
                 {
-                    var request = await ReadRequestAsync(client, timeoutSource.Token);
-                    if (request is null)
+                    try
                     {
-                        continue;
+                        var callback = await HandleClientAsync(client, timeoutSource.Token);
+                        if (callback is not null)
+                        {
+                            return callback;
+                        }
                     }
-
-                    var requestLine = request.Split("\r\n", 2, StringSplitOptions.None)[0];
-                    var parts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length < 2 || !string.Equals(parts[0], "GET", StringComparison.Ordinal))
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
-                        await WriteResponseAsync(client, 400, "Invalid request", "The sign-in callback was invalid.");
-                        continue;
+                        throw;
                     }
-
-                    if (!Uri.TryCreate($"http://{CodexConstants.CallbackHost}{parts[1]}", UriKind.Absolute, out var callbackUri))
+                    catch (CodexAuthException)
                     {
-                        await WriteResponseAsync(client, 400, "Invalid callback", "The sign-in callback was invalid.");
-                        continue;
+                        throw;
                     }
-
-                    if (!string.Equals(callbackUri.AbsolutePath, CodexConstants.CallbackPath, StringComparison.Ordinal))
+                    catch (OperationCanceledException)
                     {
-                        await WriteResponseAsync(client, 404, "Not found", "This page is not part of the sign-in flow.");
-                        continue;
+                        throw CreateTimeoutException();
                     }
-
-                    var query = ParseQuery(callbackUri.Query);
-                    if (query.TryGetValue("error", out var oauthError))
+                    catch (Exception)
                     {
-                        await WriteResponseAsync(
-                            client,
-                            400,
-                            "Authorization failed",
-                            "Codex did not authorize this app. You can close this tab.");
-                        throw new CodexAuthException($"Codex authorization was declined ({SafeCode(oauthError)}).");
+                        if (timeoutSource.IsCancellationRequested)
+                        {
+                            throw CreateTimeoutException();
+                        }
                     }
-
-                    if (!query.TryGetValue("code", out var code) ||
-                        !query.TryGetValue("state", out var state) ||
-                        string.IsNullOrWhiteSpace(code) ||
-                        string.IsNullOrWhiteSpace(state))
-                    {
-                        await WriteResponseAsync(
-                            client,
-                            400,
-                            "Authorization failed",
-                            "The callback did not include an authorization code.");
-                        throw new CodexAuthException("The Codex callback was missing its authorization code.");
-                    }
-
-                    await WriteResponseAsync(
-                        client,
-                        200,
-                        "Codex connected",
-                        "Usage Tracker can now read your Codex quota. You can close this tab.");
-                    return new OAuthCallback(code, state);
                 }
             }
         }
@@ -125,9 +109,77 @@ internal sealed class LoopbackOAuthServer : IDisposable
         }
     }
 
+    private static async Task<OAuthCallback?> HandleClientAsync(
+        TcpClient client,
+        CancellationToken cancellationToken)
+    {
+        var request = await ReadRequestAsync(client, cancellationToken);
+        if (request is null)
+        {
+            return null;
+        }
+
+        var requestLine = request.Split("\r\n", 2, StringSplitOptions.None)[0];
+        var parts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !string.Equals(parts[0], "GET", StringComparison.Ordinal))
+        {
+            await TryWriteResponseAsync(client, 400, "Invalid request", "The sign-in callback was invalid.");
+            return null;
+        }
+
+        if (!Uri.TryCreate($"http://{CodexConstants.CallbackHost}{parts[1]}", UriKind.Absolute, out var callbackUri))
+        {
+            await TryWriteResponseAsync(client, 400, "Invalid callback", "The sign-in callback was invalid.");
+            return null;
+        }
+
+        if (!string.Equals(callbackUri.AbsolutePath, CodexConstants.CallbackPath, StringComparison.Ordinal))
+        {
+            await TryWriteResponseAsync(client, 404, "Not found", "This page is not part of the sign-in flow.");
+            return null;
+        }
+
+        var query = ParseQuery(callbackUri.Query);
+        if (query.TryGetValue("error", out var oauthError))
+        {
+            await TryWriteResponseAsync(
+                client,
+                400,
+                "Authorization failed",
+                "Codex did not authorize this app. You can close this tab.");
+            throw new CodexAuthException($"Codex authorization was declined ({SafeCode(oauthError)}).");
+        }
+
+        if (!query.TryGetValue("code", out var code) ||
+            !query.TryGetValue("state", out var state) ||
+            string.IsNullOrWhiteSpace(code) ||
+            string.IsNullOrWhiteSpace(state))
+        {
+            await TryWriteResponseAsync(
+                client,
+                400,
+                "Authorization failed",
+                "The callback did not include an authorization code.");
+            throw new CodexAuthException("The Codex callback was missing its authorization code.");
+        }
+
+        var callback = new OAuthCallback(code, state);
+
+        // The browser may drop the connection immediately after sending the
+        // callback. Do not discard a valid authorization code because the
+        // completion page could not be written.
+        await TryWriteResponseAsync(
+            client,
+            200,
+            "Codex connected",
+            "Usage Tracker can now read your Codex quota. You can close this tab.");
+        return callback;
+    }
+
     private static async Task<string?> ReadRequestAsync(TcpClient client, CancellationToken cancellationToken)
     {
-        using var stream = client.GetStream();
+        // The caller owns the client and its stream for the full request/response.
+        var stream = client.GetStream();
         var buffer = new byte[MaximumRequestBytes];
         var length = 0;
 
@@ -169,44 +221,64 @@ internal sealed class LoopbackOAuthServer : IDisposable
         return safe.Length == 0 ? "unknown error" : safe;
     }
 
+    private static Task TryWriteResponseAsync(
+        TcpClient client,
+        int statusCode,
+        string title,
+        string message)
+    {
+        return WriteResponseAsync(client, statusCode, title, message);
+    }
+
     private static async Task WriteResponseAsync(
         TcpClient client,
         int statusCode,
         string title,
         string message)
     {
-        var reason = statusCode switch
+        try
         {
-            200 => "OK",
-            404 => "Not Found",
-            _ => "Bad Request",
-        };
-        var html =
-            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-            $"<title>{title}</title><style>" +
-            ":root{color-scheme:dark light}body{margin:0;min-height:100vh;display:grid;place-items:center;" +
-            "font-family:'Segoe UI Variable','Segoe UI',sans-serif;background:#10141b;color:#f4f7fb}" +
-            ".card{max-width:440px;margin:24px;padding:36px;border:1px solid #303846;border-radius:20px;" +
-            "background:#1b1f27;box-shadow:0 20px 60px rgba(0,0,0,.35)}.mark{width:44px;height:44px;" +
-            "display:grid;place-items:center;border-radius:14px;background:#dbeafe;color:#1d4ed8;" +
-            "font-weight:700;font-size:20px;margin-bottom:22px}h1{margin:0 0 10px;font-size:26px}" +
-            "p{margin:0;color:#a9b4c3;line-height:1.55}</style></head><body><main class=\"card\">" +
-            "<div class=\"mark\">U</div>" +
-            $"<h1>{WebUtility.HtmlEncode(title)}</h1><p>{WebUtility.HtmlEncode(message)}</p>" +
-            "</main></body></html>";
-        var body = Encoding.UTF8.GetBytes(html);
-        var header = Encoding.ASCII.GetBytes(
-            $"HTTP/1.1 {statusCode} {reason}\r\n" +
-            "Content-Type: text/html; charset=utf-8\r\n" +
-            $"Content-Length: {body.Length}\r\n" +
-            "Cache-Control: no-store\r\n" +
-            "Connection: close\r\n\r\n");
+            var reason = statusCode switch
+            {
+                200 => "OK",
+                404 => "Not Found",
+                _ => "Bad Request",
+            };
+            var html =
+                "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
+                "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+                $"<title>{title}</title><style>" +
+                ":root{color-scheme:dark light}body{margin:0;min-height:100vh;display:grid;place-items:center;" +
+                "font-family:'Segoe UI Variable','Segoe UI',sans-serif;background:#10141b;color:#f4f7fb}" +
+                ".card{max-width:440px;margin:24px;padding:36px;border:1px solid #303846;border-radius:20px;" +
+                "background:#1b1f27;box-shadow:0 20px 60px rgba(0,0,0,.35)}.mark{width:44px;height:44px;" +
+                "display:grid;place-items:center;border-radius:14px;background:#dbeafe;color:#1d4ed8;" +
+                "font-weight:700;font-size:20px;margin-bottom:22px}h1{margin:0 0 10px;font-size:26px}" +
+                "p{margin:0;color:#a9b4c3;line-height:1.55}</style></head><body><main class=\"card\">" +
+                "<div class=\"mark\">U</div>" +
+                $"<h1>{WebUtility.HtmlEncode(title)}</h1><p>{WebUtility.HtmlEncode(message)}</p>" +
+                "</main></body></html>";
+            var body = Encoding.UTF8.GetBytes(html);
+            var header = Encoding.ASCII.GetBytes(
+                $"HTTP/1.1 {statusCode} {reason}\r\n" +
+                "Content-Type: text/html; charset=utf-8\r\n" +
+                $"Content-Length: {body.Length}\r\n" +
+                "Cache-Control: no-store\r\n" +
+                "Connection: close\r\n\r\n");
 
-        var stream = client.GetStream();
-        await stream.WriteAsync(header);
-        await stream.WriteAsync(body);
-        await stream.FlushAsync();
+            var stream = client.GetStream();
+            await stream.WriteAsync(header);
+            await stream.WriteAsync(body);
+            await stream.FlushAsync();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static CodexAuthException CreateTimeoutException()
+    {
+        return new CodexAuthException("Codex sign-in timed out. Start sign-in again when ready.");
     }
 
     public void Dispose()
