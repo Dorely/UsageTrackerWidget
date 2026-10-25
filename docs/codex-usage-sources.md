@@ -16,7 +16,7 @@ Polling should be cheap and must never consume quota.
 
 - Every request needs `authorization: Bearer <access token>` and `chatgpt-account-id: <JWT claim "https://api.openai.com/auth".chatgpt_account_id>`.
 - Also send `user-agent` and `accept: application/json`, plus an `originator` header (ImageGenCli sends `pi`).
-- OAuth: PKCE against `https://auth.openai.com/oauth/authorize` and `/oauth/token`, with client id `app_EMoamEEZ73f0CkXaXp7hrann`, scope `openid profile email offline_access`, and loopback redirect `http://localhost:1455/auth/callback`.
+- OAuth: PKCE against `https://auth.openai.com/oauth/authorize` and `/oauth/token`, with client id `app_EMoamEEZ73f0CkXaXp7hrann`, scope `openid profile email offline_access`, and loopback redirect `http://localhost:1455/auth/callback`. Codex CLI and ImageGenCli use that exact redirect. UsageTrackerWidget uses an ephemeral `http://127.0.0.1:<port>/auth/callback` instead because the authorization server accepts arbitrary loopback ports for this client; see the tracker notes below.
 - **Use a separate login, or delegate to the app that owns the token. Never share another app's refresh token.** Refresh tokens rotate, so if two processes refresh the same token, the login gets revoked. ImageGenCli guards its own token with a cross-process refresh lock.
   - Option A (simplest): the tracker runs its own OAuth login and keeps its own token store (OS vault, with an encrypted-file fallback).
   - Option B: add an `imagegen usage` command to ImageGenCli that prints the numbers below as JSON, and have the tracker shell out to it.
@@ -95,6 +95,8 @@ Relevant fields:
 ## Tracker implementation notes (2026-10-25)
 
 - UsageTrackerWidget uses its own OAuth grant and DPAPI-protected token store. It does not read or refresh Codex CLI or ImageGenCli credentials.
+- The authorization endpoint accepts `http://127.0.0.1:<arbitrary-port>/auth/callback` for this client. A probe of ports 1456, 18743, and 49321 all redirected to the normal OpenAI login page, while `http://localhost:1456/auth/callback` returned HTTP 400. The tracker therefore binds an ephemeral IPv4 loopback port before opening the browser and reuses that exact redirect URI for the code exchange. This avoids the fixed `localhost:1455` collision with Codex CLI, ImageGenCli, and Lorekeeper.
+- The browser must not be opened until the loopback listener has bound successfully; otherwise another local `/auth/callback` host can consume the authorization redirect.
 - The image-meter probe sends `{"model":"gpt-image-2.5-flare"}` with no prompt. This is deliberately incomplete so the backend cannot generate an image even if the `background` validation behavior changes.
 - The tracker accepts image-meter data only from HTTP 400 responses whose body identifies the missing required prompt (`missing_required_parameter` or a `prompt` parameter error). It reads only `x-codex-primary-used-percent`, `x-codex-primary-window-minutes`, `x-codex-primary-reset-at`, `x-codex-primary-reset-after-seconds`, and `x-codex-plan-type`.
 - A different image response disables automatic image-meter tracking until the user explicitly re-enables it. There is no retry loop for this probe.

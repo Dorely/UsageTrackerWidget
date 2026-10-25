@@ -28,12 +28,10 @@ public sealed class CodexOAuthService
         Action<string, bool>? authorizationReady,
         CancellationToken cancellationToken)
     {
+        using var callbackServer = new LoopbackOAuthServer();
         var pkce = CodexPkce.Create();
-        var callbackTask = LoopbackOAuthServer.WaitAsync(
-            CodexConstants.LoopbackPort,
-            CodexConstants.LoginTimeout,
-            cancellationToken);
-        var authorizeUrl = CodexPkce.BuildAuthorizeUrl(pkce);
+        var authorizeUrl = CodexPkce.BuildAuthorizeUrl(pkce, callbackServer.RedirectUri);
+        var callbackTask = callbackServer.WaitAsync(CodexConstants.LoginTimeout, cancellationToken);
         var browserOpened = TryOpenBrowser(authorizeUrl);
         authorizationReady?.Invoke(authorizeUrl, browserOpened);
 
@@ -52,12 +50,17 @@ public sealed class CodexOAuthService
             throw new CodexAuthException("The Codex callback state did not match. Start sign-in again.");
         }
 
-        return await ExchangeCodeAsync(callback.Code, pkce.Verifier, cancellationToken);
+        return await ExchangeCodeAsync(
+            callback.Code,
+            pkce.Verifier,
+            callbackServer.RedirectUri,
+            cancellationToken);
     }
 
     internal async Task<CodexTokens> ExchangeCodeAsync(
         string code,
         string verifier,
+        Uri redirectUri,
         CancellationToken cancellationToken)
     {
         return await PostTokenRequestAsync(
@@ -66,7 +69,7 @@ public sealed class CodexOAuthService
                 ["grant_type"] = "authorization_code",
                 ["client_id"] = CodexConstants.ClientId,
                 ["code"] = code,
-                ["redirect_uri"] = CodexConstants.RedirectUri,
+                ["redirect_uri"] = redirectUri.AbsoluteUri,
                 ["code_verifier"] = verifier,
             },
             fallbackRefreshToken: null,

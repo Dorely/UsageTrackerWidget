@@ -6,30 +6,39 @@ namespace UsageTrackerWidget.Providers.Codex;
 
 internal sealed record OAuthCallback(string Code, string State);
 
-internal static class LoopbackOAuthServer
+internal sealed class LoopbackOAuthServer : IDisposable
 {
     private const int MaximumRequestBytes = 16 * 1024;
 
-    public static async Task<OAuthCallback> WaitAsync(
-        int port,
+    private readonly TcpListener _listener;
+
+    public LoopbackOAuthServer()
+    {
+        _listener = new TcpListener(IPAddress.Loopback, 0);
+        try
+        {
+            _listener.Start();
+        }
+        catch (SocketException exception)
+        {
+            throw new CodexAuthException(
+                "The local sign-in callback listener could not start. Check the Windows firewall and try again.",
+                exception);
+        }
+
+        var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        RedirectUri = new Uri(
+            $"http://{CodexConstants.CallbackHost}:{port}{CodexConstants.CallbackPath}");
+    }
+
+    public Uri RedirectUri { get; }
+
+    public async Task<OAuthCallback> WaitAsync(
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(timeout);
-
-        TcpListener listener;
-        try
-        {
-            listener = new TcpListener(IPAddress.Loopback, port);
-            listener.Start();
-        }
-        catch (SocketException exception)
-        {
-            throw new CodexAuthException(
-                $"Port {port} is unavailable. Close the process using it and try again.",
-                exception);
-        }
 
         try
         {
@@ -38,11 +47,15 @@ internal static class LoopbackOAuthServer
                 TcpClient client;
                 try
                 {
-                    client = await listener.AcceptTcpClientAsync(timeoutSource.Token);
+                    client = await _listener.AcceptTcpClientAsync(timeoutSource.Token);
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
                     throw new CodexAuthException("Codex sign-in timed out. Start sign-in again when ready.");
+                }
+                catch (ObjectDisposedException)
+                {
+                    throw new CodexAuthException("Codex sign-in was canceled.");
                 }
 
                 using (client)
@@ -61,7 +74,7 @@ internal static class LoopbackOAuthServer
                         continue;
                     }
 
-                    if (!Uri.TryCreate($"http://localhost{parts[1]}", UriKind.Absolute, out var callbackUri))
+                    if (!Uri.TryCreate($"http://{CodexConstants.CallbackHost}{parts[1]}", UriKind.Absolute, out var callbackUri))
                     {
                         await WriteResponseAsync(client, 400, "Invalid callback", "The sign-in callback was invalid.");
                         continue;
@@ -108,7 +121,7 @@ internal static class LoopbackOAuthServer
         }
         finally
         {
-            listener.Stop();
+            _listener.Stop();
         }
     }
 
@@ -194,5 +207,10 @@ internal static class LoopbackOAuthServer
         await stream.WriteAsync(header);
         await stream.WriteAsync(body);
         await stream.FlushAsync();
+    }
+
+    public void Dispose()
+    {
+        _listener.Stop();
     }
 }

@@ -62,7 +62,9 @@ The tray icon shows the highest known used percentage. Its border uses green, am
 
 ## Authentication and privacy
 
-Usage Tracker performs its own OpenAI/Codex sign-in. It never reads, copies, or refreshes Codex CLI's, ImageGenCli's, or any other application's tokens. Refresh tokens rotate, so sharing another app's token can revoke that app's login.
+Usage Tracker performs its own OpenAI/Codex sign-in. It never reads, copies, or refreshes Codex CLI's, ImageGenCli's, any other application's tokens, or Lorekeeper's login. Refresh tokens rotate, so sharing another app's token can revoke that app's login.
+
+The sign-in callback binds a short-lived, unused `127.0.0.1` port. It does not use the fixed `localhost:1455` callback, so it can complete while Lorekeeper or another Codex client is running.
 
 - Credentials: `%LOCALAPPDATA%\UsageTrackerWidget\credentials\codex.dat`, protected with Windows DPAPI for the current user.
 - History: `%LOCALAPPDATA%\UsageTrackerWidget\usage.db`.

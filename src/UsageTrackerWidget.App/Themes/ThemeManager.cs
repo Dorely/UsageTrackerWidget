@@ -44,7 +44,7 @@ internal sealed class ThemeManager : IDisposable
         {
             using var key = Registry.CurrentUser.OpenSubKey(
                 @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-            return key?.GetValue("SystemUsesLightTheme") is int value && value != 0;
+            return key?.GetValue("AppsUseLightTheme") is int value && value != 0;
         }
         catch (Exception)
         {

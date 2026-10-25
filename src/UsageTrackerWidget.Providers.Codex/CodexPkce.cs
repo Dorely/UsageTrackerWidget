@@ -15,13 +15,13 @@ internal static class CodexPkce
         return new CodexPkcePair(verifier, challenge, state);
     }
 
-    public static string BuildAuthorizeUrl(CodexPkcePair pair)
+    public static string BuildAuthorizeUrl(CodexPkcePair pair, Uri redirectUri)
     {
         var parameters = new Dictionary<string, string>
         {
             ["response_type"] = "code",
             ["client_id"] = CodexConstants.ClientId,
-            ["redirect_uri"] = CodexConstants.RedirectUri,
+            ["redirect_uri"] = redirectUri.AbsoluteUri,
             ["scope"] = CodexConstants.Scope,
             ["state"] = pair.State,
             ["code_challenge"] = pair.Challenge,

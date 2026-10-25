@@ -10,9 +10,8 @@ internal static class CodexConstants
     public const string TokenEndpoint = "https://auth.openai.com/oauth/token";
     public const string ClientId = "app_EMoamEEZ73f0CkXaXp7hrann";
     public const string Scope = "openid profile email offline_access";
-    public const string RedirectUri = "http://localhost:1455/auth/callback";
+    public const string CallbackHost = "127.0.0.1";
     public const string CallbackPath = "/auth/callback";
-    public const int LoopbackPort = 1455;
 
     public const string UsageEndpoint = "https://chatgpt.com/backend-api/wham/usage";
     public const string ImagesEndpoint = "https://chatgpt.com/backend-api/codex/images/generations";
