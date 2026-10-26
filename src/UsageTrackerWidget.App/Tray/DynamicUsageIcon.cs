@@ -37,25 +37,18 @@ internal static class DynamicUsageIcon
                 _ => Healthy,
             };
 
-        var fontSize = text.Length switch
-        {
-            >= 3 => 31,
-            2 => 40,
-            _ => 44,
-        };
-
         using var bitmap = new Bitmap(PixelSize, PixelSize, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(bitmap))
         using (var backgroundBrush = new SolidBrush(Background))
         using (var foregroundBrush = new SolidBrush(Foreground))
         using (var borderPen = new Pen(accent, 4))
-        using (var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var format = new StringFormat
         {
             Alignment = StringAlignment.Center,
             LineAlignment = StringAlignment.Center,
             FormatFlags = StringFormatFlags.NoWrap,
         })
+        using (var font = CreateNumberFont(graphics, text, format))
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
@@ -78,6 +71,35 @@ internal static class DynamicUsageIcon
         var icon = new Icon(iconStream);
         IconStreams.Add(icon, iconStream);
         return icon;
+    }
+
+    private static Font CreateNumberFont(Graphics graphics, string text, StringFormat format)
+    {
+        if (text.Length < 3)
+        {
+            var fontSize = text.Length == 2 ? 40f : 44f;
+            return new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Pixel);
+        }
+
+        Font? condensed = null;
+        try
+        {
+            condensed = new Font(
+                "Bahnschrift SemiCondensed",
+                31f,
+                FontStyle.Bold,
+                GraphicsUnit.Pixel);
+            if (graphics.MeasureString(text, condensed, PointF.Empty, format).Width <= 52f)
+            {
+                return condensed;
+            }
+        }
+        catch (ArgumentException)
+        {
+        }
+
+        condensed?.Dispose();
+        return new Font("Segoe UI", 24f, FontStyle.Bold, GraphicsUnit.Pixel);
     }
 
     private static byte[] CreateSingleFrameIco(byte[] pngBytes, int size)
