@@ -28,6 +28,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _clockTimer;
     private readonly CancellationTokenSource _lifetimeSource = new();
     private AppSettings _settings;
+    private string _trayIconMetric;
     private DateTimeOffset? _lastSuccessfulAt;
     private bool _suppressSettingsSideEffects;
     private CancellationTokenSource? _loginSource;
@@ -113,6 +114,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _settingsStore = settingsStore;
         _startupRegistration = startupRegistration;
         _settings = settings;
+        _trayIconMetric = NormalizeTrayIconMetric(settings.TrayIconMetric);
         _exitAction = exitAction;
         _dispatcher = Application.Current.Dispatcher;
 
@@ -122,6 +124,14 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
             new UsageWindowViewModel(UsageWindowKeys.CodexWeekly, "Weekly limit", "Week"),
             new UsageWindowViewModel(UsageWindowKeys.CodexDailyImages, "Daily image allowance", "Images"),
         ];
+        TrayIconOptions =
+        [
+            new TrayMetricOptionViewModel("highest", "Highest", SelectTrayIconMetric),
+            new TrayMetricOptionViewModel("session", "5-hour", SelectTrayIconMetric),
+            new TrayMetricOptionViewModel("weekly", "Weekly", SelectTrayIconMetric),
+            new TrayMetricOptionViewModel("images", "Images", SelectTrayIconMetric),
+        ];
+        SyncTrayIconOptionSelection();
 
         _suppressSettingsSideEffects = true;
         StartWithWindows = settings.StartWithWindows;
@@ -147,6 +157,8 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     }
 
     public ObservableCollection<UsageWindowViewModel> Windows { get; }
+
+    public ObservableCollection<TrayMetricOptionViewModel> TrayIconOptions { get; }
 
     public ObservableCollection<UsageIssueViewModel> Issues { get; } = [];
 
@@ -405,6 +417,39 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
                 SafeExceptionDetail(exception),
                 false);
         }
+    }
+
+    private void SelectTrayIconMetric(string metric)
+    {
+        var normalized = NormalizeTrayIconMetric(metric);
+        if (string.Equals(_trayIconMetric, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _trayIconMetric = normalized;
+        SyncTrayIconOptionSelection();
+        _settings = _settings with { TrayIconMetric = _trayIconMetric };
+        SaveSettings();
+        UpdateSummary();
+    }
+
+    private void SyncTrayIconOptionSelection()
+    {
+        foreach (var option in TrayIconOptions)
+        {
+            option.IsSelected = string.Equals(
+                option.Key,
+                _trayIconMetric,
+                StringComparison.Ordinal);
+        }
+    }
+
+    private static string NormalizeTrayIconMetric(string? metric)
+    {
+        return metric is "session" or "weekly" or "images"
+            ? metric
+            : "highest";
     }
 
     partial void OnTrackImageAllowanceChanged(bool value)
@@ -737,9 +782,21 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
             .Where(window => !window.IsTrackingOff && window.IsKnown)
             .ToList();
 
-        IconPercent = knownWindows.Count > 0
-            ? knownWindows.Max(window => window.UsedPercent)
-            : null;
+        var selectedWindow = _trayIconMetric switch
+        {
+            "session" => Windows.FirstOrDefault(window => window.Key == UsageWindowKeys.CodexSession),
+            "weekly" => Windows.FirstOrDefault(window => window.Key == UsageWindowKeys.CodexWeekly),
+            "images" => Windows.FirstOrDefault(window => window.Key == UsageWindowKeys.CodexDailyImages),
+            _ => null,
+        };
+
+        IconPercent = selectedWindow is null
+            ? knownWindows.Count > 0
+                ? knownWindows.Max(window => window.UsedPercent)
+                : null
+            : !selectedWindow.IsTrackingOff && selectedWindow.IsKnown
+                ? selectedWindow.UsedPercent
+                : null;
         IconWarning = !IsConnected || IsStale || HasIssues;
 
         if (IsLoginInProgress)

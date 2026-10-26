@@ -39,16 +39,16 @@ internal static class DynamicUsageIcon
 
         var fontSize = text.Length switch
         {
-            >= 3 => 24,
-            2 => 28,
-            _ => 31,
+            >= 3 => 31,
+            2 => 40,
+            _ => 44,
         };
 
         using var bitmap = new Bitmap(PixelSize, PixelSize, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(bitmap))
         using (var backgroundBrush = new SolidBrush(Background))
         using (var foregroundBrush = new SolidBrush(Foreground))
-        using (var borderPen = new Pen(accent, 5))
+        using (var borderPen = new Pen(accent, 4))
         using (var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var format = new StringFormat
         {
@@ -58,6 +58,7 @@ internal static class DynamicUsageIcon
         })
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
             graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             graphics.Clear(Color.Transparent);
             graphics.FillEllipse(backgroundBrush, 2, 2, PixelSize - 4, PixelSize - 4);
@@ -66,7 +67,7 @@ internal static class DynamicUsageIcon
                 text,
                 font,
                 foregroundBrush,
-                new RectangleF(0, -1, PixelSize, PixelSize),
+                new RectangleF(0, -2, PixelSize, PixelSize),
                 format);
         }
 

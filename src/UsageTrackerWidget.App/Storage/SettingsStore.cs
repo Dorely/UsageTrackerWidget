@@ -5,7 +5,8 @@ namespace UsageTrackerWidget.App.Storage;
 
 internal sealed record AppSettings(
     bool StartWithWindows = true,
-    bool TrackImageAllowance = true);
+    bool TrackImageAllowance = true,
+    string TrayIconMetric = "highest");
 
 internal sealed class SettingsStore
 {
@@ -28,7 +29,13 @@ internal sealed class SettingsStore
         try
         {
             var json = File.ReadAllText(_path);
-            return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? new AppSettings();
+            return settings with
+            {
+                TrayIconMetric = string.IsNullOrWhiteSpace(settings.TrayIconMetric)
+                    ? "highest"
+                    : settings.TrayIconMetric,
+            };
         }
         catch (FileNotFoundException)
         {

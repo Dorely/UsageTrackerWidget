@@ -62,6 +62,7 @@ Read this map at the start of each development session. Generated output, depend
 | `src/UsageTrackerWidget.App/Views/FatalErrorWindow.cs` | In-app startup failure surface; no native message box. |
 | `src/UsageTrackerWidget.App/ViewModels/UsageViewModel.cs` | State merging, polling events, login/logout, settings, summary, and commands. |
 | `src/UsageTrackerWidget.App/ViewModels/UsageWindowViewModel.cs` | Per-window value, state, reset countdown, progress, and history formatting. |
+| `src/UsageTrackerWidget.App/ViewModels/TrayMetricOptionViewModel.cs` | Selectable tray-icon usage metric option. |
 | `src/UsageTrackerWidget.App/ViewModels/UsageIssueViewModel.cs` | Sanitized source-error display model. |
 | `src/UsageTrackerWidget.App/Services/UsagePollingService.cs` | Single-flight startup, manual, periodic, and resume refreshes. |
 | `src/UsageTrackerWidget.App/Services/StartupRegistration.cs` | Current-user Windows startup entry for the published executable. |

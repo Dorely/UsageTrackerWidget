@@ -58,7 +58,7 @@ Windows controls whether notification-area icons appear beside the clock or in t
 3. Turn on **Usage Tracker**.
 4. If it remains in overflow, drag its icon onto the taskbar.
 
-The tray icon shows the highest known used percentage. Its border uses green, amber, or red as usage rises, and an amber state when data is stale. Hover for a compact summary or click for details. Right-click for refresh, startup, and exit controls.
+The tray icon shows the highest known used percentage by default. In Settings, choose whether the icon represents the highest usage, the 5-hour limit, the weekly limit, or the daily image allowance. Its border uses green, amber, or red as usage rises, and an amber state when data is stale. Hover for a compact summary or click for details. Right-click for refresh, startup, and exit controls.
 
 ## Authentication and privacy
 

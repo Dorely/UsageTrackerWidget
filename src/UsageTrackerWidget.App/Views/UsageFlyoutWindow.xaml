@@ -406,6 +406,29 @@
                                            FontSize="13"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,9" />
+
+                                <TextBlock Text="Tray icon shows"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,6" />
+                                <ItemsControl ItemsSource="{Binding TrayIconOptions}"
+                                              Margin="0,0,0,10">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <RadioButton Style="{StaticResource ChoiceChipStyle}"
+                                                         Content="{Binding Label}"
+                                                         IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                                         Command="{Binding SelectCommand}"
+                                                         Margin="0,0,6,6" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
                                 <CheckBox Content="Start with Windows"
                                           IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
                                           Margin="0,0,0,7" />
