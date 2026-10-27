@@ -79,7 +79,7 @@ The app never sends usage data anywhere except to Codex when checking the quota.
 Codex usage checks are read-only and quota-free:
 
 - `GET https://chatgpt.com/backend-api/wham/usage` supplies the 5-hour and weekly windows.
-- A deliberately incomplete image-generation request supplies the separate daily image meter. The request omits the required prompt, so the backend rejects it before generating anything. The app accepts the meter only from the expected HTTP 400 response and does not retry it.
+- A deliberately incomplete image-generation request supplies the separate daily image meter. The request omits the required prompt, so the backend rejects it before generating anything. The app accepts the meter only from the expected HTTP 400 response, or from the HTTP 429 `usage_limit_reached` response the backend sends once the allowance is exhausted, and does not retry it.
 - If the image endpoint changes shape, automatic image tracking disables itself and shows the mismatch. Re-enable it from Settings only after reviewing the change.
 
 These are undocumented backend endpoints. See [docs/codex-usage-sources.md](docs/codex-usage-sources.md) for the observed contracts and failure handling.

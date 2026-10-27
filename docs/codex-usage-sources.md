@@ -101,3 +101,11 @@ Relevant fields:
 - The tracker accepts image-meter data only from HTTP 400 responses whose body identifies the missing required prompt (`missing_required_parameter` or a `prompt` parameter error). It reads only `x-codex-primary-used-percent`, `x-codex-primary-window-minutes`, `x-codex-primary-reset-at`, `x-codex-primary-reset-after-seconds`, and `x-codex-plan-type`.
 - A different image response disables automatic image-meter tracking until the user explicitly re-enables it. There is no retry loop for this probe.
 - Live end-to-end verification of the signed-in image-meter response is still required with the tracker's own account login. No tokens or account-identifying values were recorded during implementation.
+
+## Image allowance exhausted (2026-10-27, Plus account)
+
+- The meter jumped from 70% to 92% between two 10-minute polls, and image generation was then refused while the last 400 probe still read 92%. The allowance can block before the meter reaches 100%, or a single large request can push it over.
+- Once blocked, the missing-prompt probe returns **HTTP 429** instead of 400: the limit check runs before request validation. The body has `error.type: "usage_limit_reached"` (no `code` or `param`).
+- The 429 still carries the meter headers: `x-codex-active-limit: imagegen_premium`, `x-codex-primary-used-percent: 100`, `x-codex-primary-window-minutes: 1440`, `x-codex-primary-reset-at`, `x-codex-primary-reset-after-seconds`, `x-codex-plan-type`, plus `x-codex-secondary-*` (0), `x-codex-primary-over-secondary-limit-percent` (0), and `x-codex-credits-*`.
+- `/wham/usage` at the same moment reported `limit_reached: false` and `rate_limit_reached_type: null`; the image limit is not reflected there.
+- The tracker now accepts a 429 whose `error.type` is `usage_limit_reached` as a valid meter reading and marks the daily-image window as limit reached. Other 429s remain transient errors.

@@ -185,7 +185,12 @@ public sealed partial class CodexUsageProvider : IUsageProvider
              (body.Contains("\"param\"", StringComparison.OrdinalIgnoreCase) &&
               body.Contains("prompt", StringComparison.OrdinalIgnoreCase)));
 
-        if (!expectedRejection)
+        // Once the allowance is exhausted the backend rejects the probe with 429 before validating it,
+        // and still sends the meter headers.
+        var limitReachedRejection = response.StatusCode == HttpStatusCode.TooManyRequests &&
+            string.Equals(ReadBackendErrorType(body), "usage_limit_reached", StringComparison.Ordinal);
+
+        if (!expectedRejection && !limitReachedRejection)
         {
             var isTransientOrAuthFailure = response.StatusCode is
                 HttpStatusCode.Unauthorized or
@@ -243,7 +248,7 @@ public sealed partial class CodexUsageProvider : IUsageProvider
             usedPercent,
             windowLength,
             resetAt,
-            usedPercent >= 100);
+            limitReachedRejection || usedPercent >= 100);
 
         return new ParsedImageMeter(window, planLabel);
     }
@@ -596,6 +601,30 @@ public sealed partial class CodexUsageProvider : IUsageProvider
             }
 
             return SanitizeDetail(value);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadBackendErrorType(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            return document.RootElement.ValueKind == JsonValueKind.Object &&
+                   document.RootElement.TryGetProperty("error", out var error) &&
+                   error.ValueKind == JsonValueKind.Object &&
+                   error.TryGetProperty("type", out var type) &&
+                   type.ValueKind == JsonValueKind.String
+                ? type.GetString()
+                : null;
         }
         catch (JsonException)
         {
