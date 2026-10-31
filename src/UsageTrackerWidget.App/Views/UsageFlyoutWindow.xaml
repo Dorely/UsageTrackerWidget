@@ -37,6 +37,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Grid Grid.Row="0">
@@ -180,6 +181,27 @@
                                             ResetBrush="{DynamicResource WarningBrush}"
                                             GuideBrush="{DynamicResource TrackBrush}"
                                             Visibility="{Binding HasHistory, Converter={StaticResource BoolToVisibility}}" />
+
+                    <TextBlock Grid.Row="5"
+                               Margin="0,7,0,0"
+                               Text="{Binding AutoStart.CardText, FallbackValue=''}"
+                               FontSize="10.5"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding AutoStart.IsCardVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}">
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding AutoStart.OutcomeIsError}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding AutoStart.IsBlocked}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -380,7 +402,7 @@
                                 </TextBlock>
                             </StackPanel>
                             <TextBlock Grid.Column="1"
-                                       Text="READ-ONLY"
+                                       Text="{Binding QuotaModeText}"
                                        Style="{StaticResource SectionLabelStyle}"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextMutedBrush}" />
@@ -437,6 +459,80 @@
                                           Margin="0,0,0,4" />
                                 <TextBlock Style="{StaticResource CaptionTextStyle}"
                                            Text="Uses a deliberately incomplete image request that Codex rejects before generating anything." />
+
+                                <Border Height="1"
+                                        Margin="0,12,0,11"
+                                        Background="{DynamicResource DividerBrush}" />
+
+                                <TextBlock Text="Auto-start limit clocks"
+                                           FontSize="12"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Margin="0,3,0,9"
+                                           Style="{StaticResource CaptionTextStyle}"
+                                           Text="A window's countdown begins with its first request. When a window is idle, Usage Tracker can send one tiny request (a one-word reply, or a single low-quality image) to start it. This spends a small amount of quota." />
+                                <ItemsControl ItemsSource="{Binding AutoStarts}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,0,0,10">
+                                                <CheckBox Content="{Binding Title}"
+                                                          IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                                                <StackPanel Margin="24,7,0,0"
+                                                            Visibility="{Binding IsEnabled, Converter={StaticResource BoolToVisibility}}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <RadioButton Style="{StaticResource ChoiceChipStyle}"
+                                                                     Content="At a time"
+                                                                     IsChecked="{Binding IsTimeMode, Mode=OneWay}"
+                                                                     Command="{Binding SelectTimeModeCommand}"
+                                                                     Margin="0,0,6,0" />
+                                                        <RadioButton Style="{StaticResource ChoiceChipStyle}"
+                                                                     Content="Keep rolling"
+                                                                     IsChecked="{Binding IsRollingMode, Mode=OneWay}"
+                                                                     Command="{Binding SelectRollingModeCommand}" />
+                                                        <TextBox Width="86"
+                                                                 Margin="10,0,0,0"
+                                                                 VerticalContentAlignment="Center"
+                                                                 Text="{Binding TimeText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                                 AutomationProperties.Name="Auto-start time"
+                                                                 ToolTip="Local time, for example 5:00 AM or 17:30"
+                                                                 Visibility="{Binding IsTimeMode, Converter={StaticResource BoolToVisibility}}" />
+                                                    </StackPanel>
+                                                    <TextBlock Margin="0,5,0,0"
+                                                               Text="{Binding TimeError}"
+                                                               Foreground="{DynamicResource DangerBrush}"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               Visibility="{Binding HasTimeError, Converter={StaticResource BoolToVisibility}}" />
+                                                    <TextBlock Margin="0,5,0,0"
+                                                               Style="{StaticResource CaptionTextStyle}"
+                                                               FontSize="11"
+                                                               Text="{Binding ScheduleText}" />
+                                                    <TextBlock Margin="0,3,0,0"
+                                                               Text="{Binding BlockedReason}"
+                                                               Foreground="{DynamicResource WarningBrush}"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVisibility}}" />
+                                                    <TextBlock Margin="0,3,0,0"
+                                                               Text="{Binding Outcome}"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               Visibility="{Binding HasOutcome, Converter={StaticResource BoolToVisibility}}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="{x:Type TextBlock}">
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding OutcomeIsError}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
                                 <Border Height="1"
                                         Margin="0,12,0,11"

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using UsageTrackerWidget.App.ViewModels;
@@ -77,6 +78,7 @@ public partial class UsageFlyoutWindow : Window
 
     private void OnDeactivated(object? sender, EventArgs eventArgs)
     {
+        CommitFocusedTextBox();
         if (IsVisible)
         {
             Hide();
@@ -87,9 +89,26 @@ public partial class UsageFlyoutWindow : Window
     {
         if (eventArgs.Key == Key.Escape)
         {
+            CommitFocusedTextBox();
             Hide();
             eventArgs.Handled = true;
         }
+        else if (eventArgs.Key == Key.Enter && CommitFocusedTextBox())
+        {
+            eventArgs.Handled = true;
+        }
+    }
+
+    // Text inputs commit on lost focus, which does not fire when the flyout hides or Enter is pressed.
+    private static bool CommitFocusedTextBox()
+    {
+        if (Keyboard.FocusedElement is not TextBox { IsReadOnly: false } textBox)
+        {
+            return false;
+        }
+
+        textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        return true;
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs eventArgs)

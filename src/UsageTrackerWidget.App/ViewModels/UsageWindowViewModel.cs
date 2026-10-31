@@ -23,11 +23,16 @@ internal sealed class UsageWindowViewModel : ObservableObject
     private IReadOnlyList<UsageHistoryPoint> _history = [];
     private string _historyRangeLabel = string.Empty;
 
-    public UsageWindowViewModel(string key, string displayName, string shortName)
+    public UsageWindowViewModel(
+        string key,
+        string displayName,
+        string shortName,
+        WindowAutoStartViewModel? autoStart = null)
     {
         Key = key;
         DisplayName = displayName;
         ShortName = shortName;
+        AutoStart = autoStart;
     }
 
     public string Key { get; }
@@ -35,6 +40,8 @@ internal sealed class UsageWindowViewModel : ObservableObject
     public string DisplayName { get; }
 
     public string ShortName { get; }
+
+    public WindowAutoStartViewModel? AutoStart { get; }
 
     public double? UsedPercent => _usedPercent;
 

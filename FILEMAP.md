@@ -22,14 +22,14 @@ Read this map at the start of each development session. Generated output, depend
 
 | File | Responsibility |
 | --- | --- |
-| `src/UsageTrackerWidget.Core/UsageModels.cs` | Provider-neutral snapshots, usage windows, errors, auth exception, and `IUsageProvider`. |
+| `src/UsageTrackerWidget.Core/UsageModels.cs` | Provider-neutral snapshots, usage windows and idle check, errors, `IUsageProvider`, and `IUsageWindowStarter`. |
 | `src/UsageTrackerWidget.Core/UsageTrackerWidget.Core.csproj` | Dependency-free shared contract library. |
 
 ## Codex provider
 
 | File | Responsibility |
 | --- | --- |
-| `src/UsageTrackerWidget.Providers.Codex/CodexConstants.cs` | OAuth, usage, image-probe, header, timeout, and display constants. |
+| `src/UsageTrackerWidget.Providers.Codex/CodexConstants.cs` | OAuth, usage, image-probe, window-start, header, timeout, and display constants. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexTokens.cs` | Internal stored, live, and request credential shapes. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexAuthException.cs` | Public auth errors and internal source-contract error classification. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexPkce.cs` | PKCE generation and the Codex authorization URL. |
@@ -38,7 +38,9 @@ Read this map at the start of each development session. Generated output, depend
 | `src/UsageTrackerWidget.Providers.Codex/CodexAccountIdentity.cs` | In-memory account-ID extraction from the access-token JWT. |
 | `src/UsageTrackerWidget.Providers.Codex/DpapiCodexTokenStore.cs` | Atomic DPAPI-protected credential persistence for the current user. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexTokenManager.cs` | Login persistence, early refresh, single-flight refresh, and 401 recovery. |
+| `src/UsageTrackerWidget.Providers.Codex/CodexBackendClient.cs` | Authenticated Codex requests with 401 recovery, shared headers, and sanitized backend error detail. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexUsageProvider.cs` | Strict parsing of rate-limit and image-meter sources into normalized snapshots. |
+| `src/UsageTrackerWidget.Providers.Codex/CodexWindowStarter.cs` | Minimal one-word reply and single low-quality image requests that start idle windows. |
 | `src/UsageTrackerWidget.Providers.Codex/UsageTrackerWidget.Providers.Codex.csproj` | Windows Codex OAuth/usage transport library. |
 
 ## WPF app
@@ -63,10 +65,12 @@ Read this map at the start of each development session. Generated output, depend
 | `src/UsageTrackerWidget.App/ViewModels/UsageViewModel.cs` | State merging, polling events, login/logout, settings, summary, and commands. |
 | `src/UsageTrackerWidget.App/ViewModels/UsageWindowViewModel.cs` | Per-window value, state, reset countdown, progress, and history formatting. |
 | `src/UsageTrackerWidget.App/ViewModels/TrayMetricOptionViewModel.cs` | Selectable tray-icon usage metric option. |
+| `src/UsageTrackerWidget.App/ViewModels/WindowAutoStartViewModel.cs` | Per-window auto-start toggle, mode, local-time entry, and last outcome. |
 | `src/UsageTrackerWidget.App/ViewModels/UsageIssueViewModel.cs` | Sanitized source-error display model. |
 | `src/UsageTrackerWidget.App/Services/UsagePollingService.cs` | Single-flight startup, manual, periodic, and resume refreshes. |
+| `src/UsageTrackerWidget.App/Services/WindowAutoStartScheduler.cs` | Timed and rolling auto-start of idle windows from fresh reads, with cooldowns. |
 | `src/UsageTrackerWidget.App/Services/StartupRegistration.cs` | Current-user Windows startup entry for the published executable. |
 | `src/UsageTrackerWidget.App/Storage/AppPaths.cs` | Local application data paths. |
-| `src/UsageTrackerWidget.App/Storage/SettingsStore.cs` | Non-secret local settings persistence. |
+| `src/UsageTrackerWidget.App/Storage/SettingsStore.cs` | Non-secret local settings, including per-window auto-start, and persistence. |
 | `src/UsageTrackerWidget.App/Storage/UsageHistoryPoint.cs` | History chart and latest-sample records. |
 | `src/UsageTrackerWidget.App/Storage/UsageHistoryRepository.cs` | SQLite schema, normalized samples, latest snapshots, and series queries. |

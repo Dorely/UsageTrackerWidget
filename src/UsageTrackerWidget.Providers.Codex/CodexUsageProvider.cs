@@ -1,23 +1,20 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using UsageTrackerWidget.Core;
 
 namespace UsageTrackerWidget.Providers.Codex;
 
-public sealed partial class CodexUsageProvider : IUsageProvider
+public sealed class CodexUsageProvider : IUsageProvider
 {
     private const string RateLimitSourceKey = "codex.rate-limits";
     private const string RateLimitSourceName = "Codex rate limits";
     private const string ImageSourceKey = "codex.image-meter";
     private const string ImageSourceName = "Daily image allowance";
 
-    private readonly CodexTokenManager _tokenManager;
-    private readonly HttpClient _httpClient;
+    private readonly CodexBackendClient _backend;
     private volatile bool _imageMeterEnabled;
 
     public CodexUsageProvider(
@@ -25,8 +22,7 @@ public sealed partial class CodexUsageProvider : IUsageProvider
         HttpClient httpClient,
         bool imageMeterEnabled = true)
     {
-        _tokenManager = tokenManager;
-        _httpClient = httpClient;
+        _backend = new CodexBackendClient(tokenManager, httpClient);
         _imageMeterEnabled = imageMeterEnabled;
     }
 
@@ -133,11 +129,11 @@ public sealed partial class CodexUsageProvider : IUsageProvider
 
     private async Task<ParsedRateLimits> ReadRateLimitsAsync(CancellationToken cancellationToken)
     {
-        using var response = await SendWithTokenAsync(
+        using var response = await _backend.SendAsync(
             credentials =>
             {
                 var request = new HttpRequestMessage(HttpMethod.Get, CodexConstants.UsageEndpoint);
-                ApplyCodexHeaders(request, credentials);
+                CodexBackendClient.ApplyHeaders(request, credentials);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 return request;
             },
@@ -165,11 +161,11 @@ public sealed partial class CodexUsageProvider : IUsageProvider
 
     private async Task<ParsedImageMeter> ReadImageMeterAsync(CancellationToken cancellationToken)
     {
-        using var response = await SendWithTokenAsync(
+        using var response = await _backend.SendAsync(
             credentials =>
             {
                 var request = new HttpRequestMessage(HttpMethod.Post, CodexConstants.ImagesEndpoint);
-                ApplyCodexHeaders(request, credentials);
+                CodexBackendClient.ApplyHeaders(request, credentials);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 request.Content = new StringContent(
                     JsonSerializer.Serialize(new { model = CodexConstants.ImageMeterModel }),
@@ -188,7 +184,7 @@ public sealed partial class CodexUsageProvider : IUsageProvider
         // Once the allowance is exhausted the backend rejects the probe with 429 before validating it,
         // and still sends the meter headers.
         var limitReachedRejection = response.StatusCode == HttpStatusCode.TooManyRequests &&
-            string.Equals(ReadBackendErrorType(body), "usage_limit_reached", StringComparison.Ordinal);
+            string.Equals(CodexBackendClient.ReadBackendErrorType(body), "usage_limit_reached", StringComparison.Ordinal);
 
         if (!expectedRejection && !limitReachedRejection)
         {
@@ -200,7 +196,7 @@ public sealed partial class CodexUsageProvider : IUsageProvider
 
             if (isTransientOrAuthFailure)
             {
-                var transientDetail = await CreateHttpSourceExceptionAsync(response, body, cancellationToken);
+                var transientDetail = CreateHttpSourceException(response, body);
                 throw new CodexUsageSourceException(
                     transientDetail.Message,
                     response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
@@ -210,7 +206,7 @@ public sealed partial class CodexUsageProvider : IUsageProvider
             }
 
             _imageMeterEnabled = false;
-            var detail = await CreateHttpSourceExceptionAsync(response, body, cancellationToken);
+            var detail = CreateHttpSourceException(response, body);
             throw new CodexUsageSourceException(
                 $"The image-meter probe returned an unexpected response (HTTP {(int)response.StatusCode}). " +
                 "Automatic image tracking was disabled. " +
@@ -251,38 +247,6 @@ public sealed partial class CodexUsageProvider : IUsageProvider
             limitReachedRejection || usedPercent >= 100);
 
         return new ParsedImageMeter(window, planLabel);
-    }
-
-    private async Task<HttpResponseMessage> SendWithTokenAsync(
-        Func<CodexCredentials, HttpRequestMessage> requestFactory,
-        CancellationToken cancellationToken)
-    {
-        var credentials = await _tokenManager.GetCredentialsAsync(cancellationToken);
-
-        for (var attempt = 0; attempt < 2; attempt++)
-        {
-            using var request = requestFactory(credentials);
-            var response = await _httpClient.SendAsync(request, cancellationToken);
-            if (response.StatusCode != HttpStatusCode.Unauthorized || attempt == 1)
-            {
-                return response;
-            }
-
-            response.Dispose();
-            credentials = await _tokenManager.RecoverFromUnauthorizedAsync(
-                credentials.AccessToken,
-                cancellationToken);
-        }
-
-        throw new UnreachableException();
-    }
-
-    private static void ApplyCodexHeaders(HttpRequestMessage request, CodexCredentials credentials)
-    {
-        request.Headers.TryAddWithoutValidation("authorization", $"Bearer {credentials.AccessToken}");
-        request.Headers.TryAddWithoutValidation("chatgpt-account-id", credentials.AccountId);
-        request.Headers.TryAddWithoutValidation("originator", CodexConstants.Originator);
-        request.Headers.TryAddWithoutValidation("user-agent", CodexConstants.UserAgent);
     }
 
     private static ParsedRateLimits ParseRateLimits(JsonElement root)
@@ -529,126 +493,15 @@ public sealed partial class CodexUsageProvider : IUsageProvider
         CancellationToken cancellationToken)
     {
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return await CreateHttpSourceExceptionAsync(response, body, cancellationToken);
+        return CreateHttpSourceException(response, body);
     }
 
-    private static Task<CodexUsageSourceException> CreateHttpSourceExceptionAsync(
-        HttpResponseMessage response,
-        string body,
-        CancellationToken cancellationToken)
+    private static CodexUsageSourceException CreateHttpSourceException(HttpResponseMessage response, string body)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var detail = ReadBackendDetail(body);
-        var message = $"Codex returned HTTP {(int)response.StatusCode}.";
-        if (response.StatusCode == HttpStatusCode.TooManyRequests &&
-            response.Headers.RetryAfter?.Delta is { } retryAfter)
-        {
-            message += $" Retry after {Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds))} seconds.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(detail))
-        {
-            message += $" {detail}";
-        }
-
-        return Task.FromResult(new CodexUsageSourceException(
-            message,
+        return new CodexUsageSourceException(
+            CodexBackendClient.DescribeHttpFailure(response, body),
             UsageErrorKind.Http,
-            (int)response.StatusCode));
-    }
-
-    private static string? ReadBackendDetail(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            var candidate = root;
-            if (root.TryGetProperty("error", out var error))
-            {
-                candidate = error;
-            }
-            else if (root.TryGetProperty("detail", out var detail))
-            {
-                candidate = detail;
-            }
-
-            string? value = null;
-            if (candidate.ValueKind == JsonValueKind.Object)
-            {
-                if (candidate.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String)
-                {
-                    value = code.GetString();
-                }
-                else if (candidate.TryGetProperty("message", out var message) &&
-                         message.ValueKind == JsonValueKind.String)
-                {
-                    value = message.GetString();
-                }
-                else if (candidate.TryGetProperty("msg", out var msg) && msg.ValueKind == JsonValueKind.String)
-                {
-                    value = msg.GetString();
-                }
-            }
-            else if (candidate.ValueKind == JsonValueKind.String)
-            {
-                value = candidate.GetString();
-            }
-
-            return SanitizeDetail(value);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static string? ReadBackendErrorType(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(body);
-            return document.RootElement.ValueKind == JsonValueKind.Object &&
-                   document.RootElement.TryGetProperty("error", out var error) &&
-                   error.ValueKind == JsonValueKind.Object &&
-                   error.TryGetProperty("type", out var type) &&
-                   type.ValueKind == JsonValueKind.String
-                ? type.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static string? SanitizeDetail(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var sanitized = WhitespaceRegex().Replace(value, " ");
-        sanitized = EmailRegex().Replace(sanitized, "[redacted]");
-        sanitized = GuidRegex().Replace(sanitized, "[redacted]");
-        sanitized = TokenLikeRegex().Replace(sanitized, "[redacted]");
-        sanitized = new string(sanitized
-            .Where(character => !char.IsControl(character))
-            .Take(240)
-            .ToArray())
-            .Trim();
-        return sanitized.Length == 0 ? null : sanitized;
+            (int)response.StatusCode);
     }
 
     private static UsageSourceError CreateError(
@@ -686,18 +539,4 @@ public sealed partial class CodexUsageProvider : IUsageProvider
         string? PlanLabel);
 
     private sealed record ParsedImageMeter(UsageWindow Window, string? PlanLabel);
-
-    [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant)]
-    private static partial Regex WhitespaceRegex();
-
-    [GeneratedRegex(@"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", RegexOptions.CultureInvariant)]
-    private static partial Regex EmailRegex();
-
-    [GeneratedRegex(
-        @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex GuidRegex();
-
-    [GeneratedRegex(@"[A-Za-z0-9_\-]{40,}", RegexOptions.CultureInvariant)]
-    private static partial Regex TokenLikeRegex();
 }

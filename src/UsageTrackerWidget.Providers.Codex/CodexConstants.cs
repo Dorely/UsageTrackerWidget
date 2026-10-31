@@ -16,6 +16,11 @@ internal static class CodexConstants
     public const string UsageEndpoint = "https://chatgpt.com/backend-api/wham/usage";
     public const string ImagesEndpoint = "https://chatgpt.com/backend-api/codex/images/generations";
     public const string ImageMeterModel = "gpt-image-2.5-flare";
+    public const string ResponsesEndpoint = "https://chatgpt.com/backend-api/codex/responses";
+    public const string SessionKickoffModel = "gpt-6-luna";
+    public const string SessionKickoffEffort = "low";
+    public const string ImageKickoffSize = "1024x1024";
+    public const string ImageKickoffQuality = "low";
     public const string Originator = "pi";
     public const string UserAgent = "UsageTrackerWidget/0.1";
 

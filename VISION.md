@@ -22,6 +22,8 @@ The primary surface is tiny and passive: current percent and time until reset at
 
 Checking usage must never consume usage. The widget observes limits; it does not spend them, retry into them, or change account state.
 
+The one exception is opt-in window auto-start: when the user turns it on, the widget may send a single minimal request to start an idle window's countdown at a time the user chose. It never does this unprompted, never for a window that is already running, and never in a retry loop.
+
 ## 3. Multi-Service, Multi-Account
 
 Each AI service is its own provider behind a common shape: named windows with a used percent, a window length, and a reset time. More than one account per service is supported, labelled by plan and a local nickname, never by email or account ID.
@@ -55,7 +57,7 @@ All data stays on the user's machine. Credentials live in OS-protected storage, 
 # Non-Goals
 
 - No hosted service, telemetry, or cloud sync.
-- No spending, purchasing, or changing plan settings on the user's behalf.
+- No purchasing or changing plan settings on the user's behalf, and no quota spending beyond the opt-in window auto-start.
 - No scraping of browser sessions or reuse of another application's credentials.
 
 ---

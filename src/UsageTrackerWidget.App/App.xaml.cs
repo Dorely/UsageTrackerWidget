@@ -21,7 +21,9 @@ public partial class App : Application
     private RegisteredWaitHandle? _showFlyoutRegistration;
     private bool _ownsMutex;
     private HttpClient? _httpClient;
+    private HttpClient? _autoStartHttpClient;
     private UsagePollingService? _pollingService;
+    private WindowAutoStartScheduler? _autoStartScheduler;
     private UsageViewModel? _viewModel;
     private UsageFlyoutWindow? _flyoutWindow;
     private TrayController? _trayController;
@@ -87,10 +89,20 @@ public partial class App : Application
             var startupRegistration = new StartupRegistration();
             _pollingService = new UsagePollingService(provider);
 
+            // Image generation can take well over the usage-read timeout.
+            _autoStartHttpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromMinutes(3),
+            };
+            _autoStartScheduler = new WindowAutoStartScheduler(
+                new CodexWindowStarter(tokenManager, _autoStartHttpClient),
+                _pollingService);
+
             _viewModel = new UsageViewModel(
                 tokenManager,
                 provider,
                 _pollingService,
+                _autoStartScheduler,
                 history,
                 settingsStore,
                 startupRegistration,
@@ -102,6 +114,7 @@ public partial class App : Application
             DispatcherUnhandledException += OnDispatcherUnhandledException;
 
             await _viewModel.InitializeAsync();
+            _autoStartScheduler.Start();
             if (_viewModel.IsConnected)
             {
                 _pollingService.Start();
@@ -185,10 +198,14 @@ public partial class App : Application
         _flyoutWindow = null;
         _viewModel?.Dispose();
         _viewModel = null;
+        _autoStartScheduler?.Dispose();
+        _autoStartScheduler = null;
         _pollingService?.Dispose();
         _pollingService = null;
         _httpClient?.Dispose();
         _httpClient = null;
+        _autoStartHttpClient?.Dispose();
+        _autoStartHttpClient = null;
         _themeManager?.Dispose();
         _themeManager = null;
 

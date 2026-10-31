@@ -20,6 +20,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     private readonly CodexTokenManager _tokenManager;
     private readonly CodexUsageProvider _provider;
     private readonly UsagePollingService _pollingService;
+    private readonly WindowAutoStartScheduler _autoStartScheduler;
     private readonly UsageHistoryRepository _history;
     private readonly SettingsStore _settingsStore;
     private readonly StartupRegistration _startupRegistration;
@@ -101,6 +102,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         CodexTokenManager tokenManager,
         CodexUsageProvider provider,
         UsagePollingService pollingService,
+        WindowAutoStartScheduler autoStartScheduler,
         UsageHistoryRepository history,
         SettingsStore settingsStore,
         StartupRegistration startupRegistration,
@@ -110,6 +112,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _tokenManager = tokenManager;
         _provider = provider;
         _pollingService = pollingService;
+        _autoStartScheduler = autoStartScheduler;
         _history = history;
         _settingsStore = settingsStore;
         _startupRegistration = startupRegistration;
@@ -118,11 +121,24 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _exitAction = exitAction;
         _dispatcher = Application.Current.Dispatcher;
 
+        AutoStarts =
+        [
+            new WindowAutoStartViewModel(
+                UsageWindowKeys.CodexSession,
+                "5-hour window",
+                settings.SessionAutoStartOrDefault,
+                OnAutoStartChanged),
+            new WindowAutoStartViewModel(
+                UsageWindowKeys.CodexDailyImages,
+                "Daily image window",
+                settings.ImageAutoStartOrDefault,
+                OnAutoStartChanged),
+        ];
         Windows =
         [
-            new UsageWindowViewModel(UsageWindowKeys.CodexSession, "5-hour limit", "5h"),
+            new UsageWindowViewModel(UsageWindowKeys.CodexSession, "5-hour limit", "5h", AutoStarts[0]),
             new UsageWindowViewModel(UsageWindowKeys.CodexWeekly, "Weekly limit", "Week"),
-            new UsageWindowViewModel(UsageWindowKeys.CodexDailyImages, "Daily image allowance", "Images"),
+            new UsageWindowViewModel(UsageWindowKeys.CodexDailyImages, "Daily image allowance", "Images", AutoStarts[1]),
         ];
         TrayIconOptions =
         [
@@ -141,6 +157,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _pollingService.ReadCompleted += OnReadCompleted;
         _pollingService.ReadFailed += OnReadFailed;
         _pollingService.RefreshingChanged += OnRefreshingChanged;
+        _autoStartScheduler.StatusChanged += OnAutoStartStatusChanged;
 
         _clockTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -157,6 +174,12 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     }
 
     public ObservableCollection<UsageWindowViewModel> Windows { get; }
+
+    public ObservableCollection<WindowAutoStartViewModel> AutoStarts { get; }
+
+    public string QuotaModeText => AutoStarts.Any(autoStart => autoStart.Settings.Enabled)
+        ? "AUTO-START ON"
+        : "READ-ONLY";
 
     public ObservableCollection<TrayMetricOptionViewModel> TrayIconOptions { get; }
 
@@ -176,6 +199,8 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
 
     private UsageWindowViewModel ImageWindow =>
         Windows.First(window => window.Key == UsageWindowKeys.CodexDailyImages);
+
+    private WindowAutoStartViewModel ImageAutoStart => AutoStarts[1];
 
     public async Task InitializeAsync()
     {
@@ -232,6 +257,11 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            foreach (var autoStart in AutoStarts)
+            {
+                ConfigureAutoStart(autoStart, isUserChange: false);
+            }
+
             IsInitializing = false;
             LastUpdatedText = BuildLastUpdatedText();
             _clockTimer.Start();
@@ -455,6 +485,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     partial void OnTrackImageAllowanceChanged(bool value)
     {
         _provider.ImageMeterEnabled = value;
+        ConfigureAutoStart(ImageAutoStart, isUserChange: !_suppressSettingsSideEffects);
         if (value)
         {
             ImageWindow.MarkStale();
@@ -515,6 +546,37 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     partial void OnLoginUrlChanged(string value)
     {
         OnPropertyChanged(nameof(HasLoginUrl));
+    }
+
+    private void OnAutoStartChanged(WindowAutoStartViewModel autoStart)
+    {
+        _settings = autoStart.WindowKey == UsageWindowKeys.CodexSession
+            ? _settings with { SessionAutoStart = autoStart.Settings }
+            : _settings with { ImageAutoStart = autoStart.Settings };
+        SaveSettings();
+        ConfigureAutoStart(autoStart, isUserChange: true);
+        OnPropertyChanged(nameof(QuotaModeText));
+    }
+
+    // The image window can only be seen, and so started, while the image meter is tracked.
+    private void ConfigureAutoStart(WindowAutoStartViewModel autoStart, bool isUserChange)
+    {
+        var blocked = autoStart.WindowKey == UsageWindowKeys.CodexDailyImages && !TrackImageAllowance;
+        autoStart.BlockedReason = blocked
+            ? "Turn on daily image tracking to auto-start this window."
+            : string.Empty;
+        var settings = blocked ? autoStart.Settings with { Enabled = false } : autoStart.Settings;
+        _autoStartScheduler.Configure(autoStart.WindowKey, settings, isUserChange);
+    }
+
+    private void OnAutoStartStatusChanged(object? sender, WindowAutoStartStatus status)
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            AutoStarts
+                .FirstOrDefault(autoStart => autoStart.WindowKey == status.WindowKey)?
+                .SetOutcome(status.Outcome, status.IsError);
+        });
     }
 
     private void PostAuthorizationState(string url, bool browserOpened)
@@ -693,6 +755,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _suppressSettingsSideEffects = false;
         _provider.ImageMeterEnabled = false;
         ImageWindow.MarkTrackingOff();
+        ConfigureAutoStart(ImageAutoStart, isUserChange: true);
         _settings = _settings with { TrackImageAllowance = false };
         SaveSettings();
     }
@@ -988,6 +1051,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _pollingService.ReadCompleted -= OnReadCompleted;
         _pollingService.ReadFailed -= OnReadFailed;
         _pollingService.RefreshingChanged -= OnRefreshingChanged;
+        _autoStartScheduler.StatusChanged -= OnAutoStartStatusChanged;
         _lifetimeSource.Cancel();
         _loginSource?.Cancel();
         _loginSource?.Dispose();

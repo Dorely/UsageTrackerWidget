@@ -22,6 +22,7 @@ The initial Windows implementation is complete:
 - Ten-minute polling, manual refresh, and refresh after sleep/resume.
 - Local SQLite history with window-appropriate sparklines and reset markers.
 - Start-with-Windows support and single-instance behavior.
+- Opt-in auto-start for the 5-hour and daily image windows.
 
 There is one Codex account per installation and no installer yet.
 
@@ -76,11 +77,20 @@ The app never sends usage data anywhere except to Codex when checking the quota.
 
 ## Usage sources
 
-Codex usage checks are read-only and quota-free:
+Codex usage checks are read-only and quota-free (auto-start, below, is the only feature that spends quota):
 
 - `GET https://chatgpt.com/backend-api/wham/usage` supplies the 5-hour and weekly windows.
 - A deliberately incomplete image-generation request supplies the separate daily image meter. The request omits the required prompt, so the backend rejects it before generating anything. The app accepts the meter only from the expected HTTP 400 response, or from the HTTP 429 `usage_limit_reached` response the backend sends once the allowance is exhausted, and does not retry it.
 - If the image endpoint changes shape, automatic image tracking disables itself and shows the mismatch. Re-enable it from Settings only after reviewing the change.
+
+## Auto-start limit clocks
+
+A window's countdown only begins with its first metered request. In Settings → Auto-start limit clocks, each of the 5-hour and daily image windows can be started automatically while it is idle (0% used with its full length remaining):
+
+- **At a time** starts the window once a day at a local time you choose, for example 5:00 AM so the 5-hour window resets at 10:00 AM. If the PC was asleep or the app closed at that time, a start up to an hour late is still made; otherwise the day is skipped.
+- **Keep rolling** starts the window again as soon as it is idle, which keeps the 24-hour image window continuously running.
+
+The start for the 5-hour window is a one-word streamed reply from a small model; the start for the image window is one low-quality 1024×1024 image, which is discarded. Both spend a small amount of quota, which is why the feature is off by default and the flyout shows **AUTO-START ON** while it is enabled. A window that is already running is never started. Each start is decided from a fresh usage read, a failed start is not retried for an hour, and a start that does not take is not repeated more than once an hour. Image auto-start requires daily image tracking. The last result appears on the window's card and in Settings.
 
 These are undocumented backend endpoints. See [docs/codex-usage-sources.md](docs/codex-usage-sources.md) for the observed contracts and failure handling.
 

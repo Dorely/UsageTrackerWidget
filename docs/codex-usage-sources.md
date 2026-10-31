@@ -109,3 +109,12 @@ Relevant fields:
 - The 429 still carries the meter headers: `x-codex-active-limit: imagegen_premium`, `x-codex-primary-used-percent: 100`, `x-codex-primary-window-minutes: 1440`, `x-codex-primary-reset-at`, `x-codex-primary-reset-after-seconds`, `x-codex-plan-type`, plus `x-codex-secondary-*` (0), `x-codex-primary-over-secondary-limit-percent` (0), and `x-codex-credits-*`.
 - `/wham/usage` at the same moment reported `limit_reached: false` and `rate_limit_reached_type: null`; the image limit is not reflected there.
 - The tracker now accepts a 429 whose `error.type` is `usage_limit_reached` as a valid meter reading and marks the daily-image window as limit reached. Other 429s remain transient errors.
+
+## Idle windows and opt-in auto-start (2026-10-30, Plus account)
+
+- Neither the 5-hour nor the daily image window counts down until the first metered request. Local history shows an idle window as `used_percent` 0 with the full window still remaining on every poll: `/wham/usage` primary `reset_at - now` ≈ 18000 s, and the image probe's `x-codex-primary-reset-at - now` ≈ 86400 s, for hours at a time. A running window at 0% (rounded) instead shows the remaining time shrinking.
+- The tracker treats a window as idle when it reads 0%, is not at its limit, and has at least its window length minus 2 minutes remaining.
+- Opt-in auto-start (off by default) spends a minimal request to start an idle window:
+  - 5-hour: `POST https://chatgpt.com/backend-api/codex/responses` with `OpenAI-Beta: responses=experimental`, `accept: text/event-stream`, and `{"model":"gpt-6-luna","instructions":"Reply with the single word OK.","input":[{"role":"user","content":[{"type":"input_text","text":"OK"}]}],"reasoning":{"effort":"low"},"stream":true,"store":false}`. The stream is drained until `response.completed` (or `response.failed`/`error`). `max_output_tokens` is not sent; Lorekeeper omits it for the Codex backend.
+  - Daily images: `POST https://chatgpt.com/backend-api/codex/images/generations` with `{"prompt":"…","model":"gpt-image-2.5-flare","size":"1024x1024","quality":"low","background":"opaque"}`. Per the calibration above this costs roughly 450 image tokens; the returned image is discarded.
+- The model choice and request shapes come from ImageGenCli and Lorekeeper. A live start has not yet been observed with the tracker's own login, so the first scheduled start should be checked against the next usage read.
