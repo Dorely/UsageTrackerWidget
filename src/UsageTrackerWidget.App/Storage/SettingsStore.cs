@@ -10,7 +10,8 @@ internal sealed record AppSettings(
     bool TrackImageAllowance = true,
     string TrayIconMetric = "highest",
     WindowAutoStartSettings? SessionAutoStart = null,
-    WindowAutoStartSettings? ImageAutoStart = null)
+    WindowAutoStartSettings? ImageAutoStart = null,
+    bool AutoApplyBankedResets = false)
 {
     [JsonIgnore]
     public WindowAutoStartSettings SessionAutoStartOrDefault =>

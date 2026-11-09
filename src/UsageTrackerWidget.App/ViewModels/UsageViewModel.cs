@@ -101,6 +101,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     public UsageViewModel(
         CodexTokenManager tokenManager,
         CodexUsageProvider provider,
+        CodexResetService resetService,
         UsagePollingService pollingService,
         WindowAutoStartScheduler autoStartScheduler,
         UsageHistoryRepository history,
@@ -120,6 +121,17 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _trayIconMetric = NormalizeTrayIconMetric(settings.TrayIconMetric);
         _exitAction = exitAction;
         _dispatcher = Application.Current.Dispatcher;
+
+        BankedResets = new BankedResetsViewModel(
+            resetService,
+            settings.AutoApplyBankedResets,
+            value =>
+            {
+                _settings = _settings with { AutoApplyBankedResets = value };
+                SaveSettings();
+                OnPropertyChanged(nameof(QuotaModeText));
+            },
+            () => _ = _pollingService.RefreshNowAsync());
 
         AutoStarts =
         [
@@ -175,11 +187,12 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<UsageWindowViewModel> Windows { get; }
 
+    public BankedResetsViewModel BankedResets { get; }
+
     public ObservableCollection<WindowAutoStartViewModel> AutoStarts { get; }
 
-    public string QuotaModeText => AutoStarts.Any(autoStart => autoStart.Settings.Enabled)
-        ? "AUTO-START ON"
-        : "READ-ONLY";
+    public string QuotaModeText => BankedResets.Enabled ? "AUTO RESET ON" :
+        AutoStarts.Any(autoStart => autoStart.Settings.Enabled) ? "AUTO-START ON" : "READ-ONLY";
 
     public ObservableCollection<TrayMetricOptionViewModel> TrayIconOptions { get; }
 
@@ -271,6 +284,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanRefresh))]
     private async Task RefreshAsync()
     {
+        BankedResets.Refresh();
         await _pollingService.RefreshNowAsync();
     }
 
@@ -520,6 +534,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
 
     partial void OnIsConnectedChanged(bool value)
     {
+        BankedResets.SetConnected(value);
         RefreshCommand.NotifyCanExecuteChanged();
         SignInCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(ShowConnectPanel));
@@ -1052,6 +1067,7 @@ internal sealed partial class UsageViewModel : ObservableObject, IDisposable
         _pollingService.ReadFailed -= OnReadFailed;
         _pollingService.RefreshingChanged -= OnRefreshingChanged;
         _autoStartScheduler.StatusChanged -= OnAutoStartStatusChanged;
+        BankedResets.Dispose();
         _lifetimeSource.Cancel();
         _loginSource?.Cancel();
         _loginSource?.Dispose();

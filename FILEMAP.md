@@ -40,6 +40,7 @@ Read this map at the start of each development session. Generated output, depend
 | `src/UsageTrackerWidget.Providers.Codex/CodexTokenManager.cs` | Login persistence, early refresh, single-flight refresh, and 401 recovery. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexBackendClient.cs` | Authenticated Codex requests with 401 recovery, shared headers, and sanitized backend error detail. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexUsageProvider.cs` | Strict parsing of rate-limit and image-meter sources into normalized snapshots. |
+| `src/UsageTrackerWidget.Providers.Codex/CodexResetService.cs` | Direct reset inventory reads and idempotent reset redemption with app-owned credentials. |
 | `src/UsageTrackerWidget.Providers.Codex/CodexWindowStarter.cs` | Minimal one-word reply and single low-quality image requests that start idle windows. |
 | `src/UsageTrackerWidget.Providers.Codex/UsageTrackerWidget.Providers.Codex.csproj` | Windows Codex OAuth/usage transport library. |
 
@@ -66,11 +67,13 @@ Read this map at the start of each development session. Generated output, depend
 | `src/UsageTrackerWidget.App/ViewModels/UsageWindowViewModel.cs` | Per-window value, state, reset countdown, progress, and history formatting. |
 | `src/UsageTrackerWidget.App/ViewModels/TrayMetricOptionViewModel.cs` | Selectable tray-icon usage metric option. |
 | `src/UsageTrackerWidget.App/ViewModels/WindowAutoStartViewModel.cs` | Per-window auto-start toggle, mode, local-time entry, and last outcome. |
+| `src/UsageTrackerWidget.App/ViewModels/BankedResetsViewModel.cs` | Reset inventory, opt-in scheduling, reconciliation, and flyout status. |
 | `src/UsageTrackerWidget.App/ViewModels/UsageIssueViewModel.cs` | Sanitized source-error display model. |
 | `src/UsageTrackerWidget.App/Services/UsagePollingService.cs` | Single-flight startup, manual, periodic, and resume refreshes. |
 | `src/UsageTrackerWidget.App/Services/WindowAutoStartScheduler.cs` | Timed and rolling auto-start of idle windows from fresh reads, with cooldowns. |
 | `src/UsageTrackerWidget.App/Services/StartupRegistration.cs` | Current-user Windows startup entry for the published executable. |
 | `src/UsageTrackerWidget.App/Storage/AppPaths.cs` | Local application data paths. |
-| `src/UsageTrackerWidget.App/Storage/SettingsStore.cs` | Non-secret local settings, including per-window auto-start, and persistence. |
+| `src/UsageTrackerWidget.App/Storage/SettingsStore.cs` | Non-secret settings and persistence, including opt-in window and reset automation. |
+| `src/UsageTrackerWidget.App/Storage/ResetAttemptStore.cs` | Atomic non-identifying journal of reset attempts and idempotency keys. |
 | `src/UsageTrackerWidget.App/Storage/UsageHistoryPoint.cs` | History chart and latest-sample records. |
 | `src/UsageTrackerWidget.App/Storage/UsageHistoryRepository.cs` | SQLite schema, normalized samples, latest snapshots, and series queries. |

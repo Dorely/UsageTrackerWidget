@@ -20,9 +20,9 @@ The primary surface is tiny and passive: current percent and time until reset at
 
 ## 2. Read-Only and Quota-Free
 
-Checking usage must never consume usage. The widget observes limits; it does not spend them, retry into them, or change account state.
+Checking usage must never consume usage. The widget observes limits; it changes account state only through explicitly enabled features.
 
-The one exception is opt-in window auto-start: when the user turns it on, the widget may send a single minimal request to start an idle window's countdown at a time the user chose. It never does this unprompted, never for a window that is already running, and never in a retry loop.
+Opt-in window auto-start may send a single minimal request to start an idle window's countdown. Separately, opt-in banked-reset automation may redeem an expiring Codex reset. Both are off by default.
 
 ## 3. Multi-Service, Multi-Account
 

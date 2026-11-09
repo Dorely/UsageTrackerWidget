@@ -411,6 +411,26 @@
                         <ItemsControl ItemsSource="{Binding Windows}"
                                       ItemTemplate="{StaticResource QuotaWindowTemplate}" />
 
+                        <Border Background="{DynamicResource SurfaceRaisedBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1" CornerRadius="12" Padding="14" Margin="0,4,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Banked Codex resets" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding BankedResets.Summary}" Margin="0,4,0,0"
+                                           Style="{StaticResource CaptionTextStyle}" />
+                                <ItemsControl ItemsSource="{Binding BankedResets.Details}" Margin="0,3,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" Margin="0,2,0,0"
+                                                       Style="{StaticResource CaptionTextStyle}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding BankedResets.Outcome}" Margin="0,4,0,0"
+                                           Style="{StaticResource CaptionTextStyle}" />
+                            </StackPanel>
+                        </Border>
+
                         <ItemsControl Margin="0,3,0,0"
                                       ItemsSource="{Binding Issues}"
                                       ItemTemplate="{StaticResource IssueTemplate}" />
@@ -459,6 +479,13 @@
                                           Margin="0,0,0,4" />
                                 <TextBlock Style="{StaticResource CaptionTextStyle}"
                                            Text="Uses a deliberately incomplete image request that Codex rejects before generating anything." />
+
+                                <Border Height="1" Margin="0,12,0,11" Background="{DynamicResource DividerBrush}" />
+                                <CheckBox Content="Auto-apply expiring banked resets"
+                                          IsChecked="{Binding BankedResets.Enabled, Mode=TwoWay}"
+                                          IsEnabled="{Binding BankedResets.CanToggle}" />
+                                <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionTextStyle}"
+                                           Text="Attempts each reset 30 minutes before expiry while this app is running. If no usage can be reset, it is not retried." />
 
                                 <Border Height="1"
                                         Margin="0,12,0,11"

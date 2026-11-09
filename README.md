@@ -23,6 +23,7 @@ The initial Windows implementation is complete:
 - Local SQLite history with window-appropriate sparklines and reset markers.
 - Start-with-Windows support and single-instance behavior.
 - Opt-in auto-start for the 5-hour and daily image windows.
+- Banked reset expiry details and opt-in auto-application shortly before expiry.
 
 There is one Codex account per installation and no installer yet.
 
@@ -70,6 +71,7 @@ The sign-in callback binds a short-lived, unused `127.0.0.1` port. It does not u
 - Credentials: `%LOCALAPPDATA%\UsageTrackerWidget\credentials\codex.dat`, protected with Windows DPAPI for the current user.
 - History: `%LOCALAPPDATA%\UsageTrackerWidget\usage.db`.
 - Settings: `%LOCALAPPDATA%\UsageTrackerWidget\settings.json`.
+- Reset-attempt journal: `%LOCALAPPDATA%\UsageTrackerWidget\reset-attempts.json`, containing hashed reset IDs and request IDs, never account IDs or credentials.
 
 The history records usage percentages, window lengths, reset times, plan labels, and a local account label. It never stores access tokens, refresh tokens, account IDs, emails, or raw service responses. Identifying fields returned by Codex are dropped before data reaches the UI or database.
 
@@ -82,6 +84,12 @@ Codex usage checks are read-only and quota-free (auto-start, below, is the only 
 - `GET https://chatgpt.com/backend-api/wham/usage` supplies the 5-hour and weekly windows.
 - A deliberately incomplete image-generation request supplies the separate daily image meter. The request omits the required prompt, so the backend rejects it before generating anything. The app accepts the meter only from the expected HTTP 400 response, or from the HTTP 429 `usage_limit_reached` response the backend sends once the allowance is exhausted, and does not retry it.
 - If the image endpoint changes shape, automatic image tracking disables itself and shows the mismatch. Re-enable it from Settings only after reviewing the change.
+
+## Banked Codex resets
+
+The flyout shows the number of available banked resets and the expiry for each reset when supplied by Codex. Settings can enable auto-application, which is off by default and becomes available after the app successfully reads reset details using its own sign-in. The app attempts each known reset about 30 minutes before expiry, or promptly on startup or wake if that time was missed and the reset is still valid. It must be running and online; no attempt is made after expiry or when expiry is unknown.
+
+Applying a banked reset changes account state and consumes the reset if Codex accepts it. If Codex reports no eligible usage to reset, the app does not retry that reset. An interrupted or uncertain request is reconciled with the same request ID. When multiple resets are due, the app refreshes the account between attempts. Resets with missing details cannot be scheduled; failures appear in the flyout. The feature uses direct Codex backend requests and needs no Codex installation.
 
 ## Auto-start limit clocks
 

@@ -101,6 +101,7 @@ public partial class App : Application
             _viewModel = new UsageViewModel(
                 tokenManager,
                 provider,
+                new CodexResetService(tokenManager, _httpClient),
                 _pollingService,
                 _autoStartScheduler,
                 history,
